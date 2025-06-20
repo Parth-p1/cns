@@ -1,0 +1,489 @@
+1.
+
+#include <stdio.h>
+#include <string.h>
+ 
+// Function to perform binary division and return remainder
+void binary_division(char dividend[], char divisor[], char remainder[]) {
+    int i, j;
+    int dividend_len = strlen(dividend);
+    int divisor_len = strlen(divisor);
+ 
+    // Copy dividend to remainder initially
+    strcpy(remainder, dividend);
+ 
+    for (i = 0; i <= dividend_len - divisor_len; i++) {
+        // Perform division only if the current bit is 1
+        if (remainder[i] == '1') {
+            // Subtract (mod 2) the divisor from remainder
+            for (j = 0; j < divisor_len; j++) {
+                remainder[i + j] = (remainder[i + j] == divisor[j]) ? '0' : '1';
+            }
+        }
+    }
+}
+ 
+// Function to append CRC bits to the input message
+void append_crc(char message[], char polynomial[], char transmitted[]) {
+    char remainder[100];
+    char appended[100];
+ 
+    strcpy(appended, message);
+ 
+    // Append n-1 zeros
+    int poly_len = strlen(polynomial);
+    for (int i = 1; i < poly_len; i++) {
+        strcat(appended, "0");
+    }
+ 
+    // Get the CRC remainder
+    binary_division(appended, polynomial, remainder);
+ 
+    // Extract only the last (poly_len - 1) bits from the remainder
+    char crc[50];
+    strcpy(crc, remainder + strlen(message));
+ 
+    // Append CRC to original message
+    strcpy(transmitted, message);
+    strcat(transmitted, crc);
+}
+ 
+int check_crc(char received[], char polynomial[]) {
+    char remainder[100];
+    binary_division(received, polynomial, remainder);
+ 
+    // Check if remainder is all zeros
+    for (int i = strlen(received) - strlen(polynomial) + 1; i < strlen(received); i++) {
+        if (remainder[i] != '0') return 0; // Error
+    }
+    return 1; // No error
+}
+ 
+int main() {
+    char message[100], polynomial[100], transmitted[200], received[200];
+ 
+    printf("Enter binary message: ");
+    scanf("%s", message);
+ 
+    printf("Enter binary polynomial (divisor): ");
+    scanf("%s", polynomial);
+ 
+    append_crc(message, polynomial, transmitted);
+    printf("Transmitted message (with CRC): %s\n", transmitted);
+ 
+    printf("Enter received message: ");
+    scanf("%s", received);
+ 
+    if (check_crc(received, polynomial)) {
+        printf("No error detected in received message.\n");
+    } else {
+        printf("Error detected in received message.\n");
+    }
+ 
+    return 0;
+}
+
+
+
+
+
+2.
+
+#include <stdio.h>
+
+int main() {
+    int capacity, leakRate, n;
+    int bucket = 0;
+
+    printf("Enter bucket capacity: ");
+    scanf("%d", &capacity);
+    printf("Enter leak rate (per time unit): ");
+    scanf("%d", &leakRate);
+    printf("Enter number of time units: ");
+    scanf("%d", &n);
+    printf("\n");
+
+    for (int t = 0; t < n; t++) {
+        int arrived;
+        printf("Time %d - Enter packets arrived: ", t);
+        scanf("%d", &arrived);
+
+        /* 1) add arrivals */
+        bucket += arrived;
+        int beforeLeak = bucket;
+
+        /* 2) drop overflow */
+        int dropped = 0;
+        if (bucket > capacity) {
+            dropped = bucket - capacity;
+            bucket = capacity;
+        }
+
+        /* 3) leak out packets */
+        int sent;
+        if (bucket <= leakRate) {
+            sent = bucket;    /* send all remaining if ≤ leakRate */
+        } else {
+            sent = leakRate;  /* otherwise send only leakRate */
+        }
+        bucket -= sent;
+        int afterLeak = bucket;
+
+        /* 4) status output */
+        printf("  Arrived:     %d\n", arrived);
+        printf("  BeforeLeak:  %d\n", beforeLeak);
+        printf("  Dropped:     %d\n", dropped);
+        printf("  Sent:        %d\n", sent);
+        printf("  AfterLeak:   %d\n\n", afterLeak);
+    }
+
+    return 0;
+}
+
+
+
+
+3.
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+// ---------- Caesar Cipher ----------
+void caesarEncrypt(char *text, int shift, char *output) {
+    for (int i = 0; text[i]; i++) {
+        char c = text[i];
+        if (isalpha(c)) {
+            char base = isupper(c) ? 'A' : 'a';
+            output[i] = (c - base + shift) % 26 + base;
+        } else {
+            output[i] = c;
+        }
+    }
+    output[strlen(text)] = '\0';
+}
+
+void caesarDecrypt(char *text, int shift, char *output) {
+    caesarEncrypt(text, 26 - shift, output);
+}
+
+// ---------- Playfair Cipher ----------
+void preparePlayfairKey(char *key, char matrix[5][5]) {
+    int used[26] = {0}, i, j, k = 0;
+    char c;
+
+    used['J' - 'A'] = 1;
+    for (i = 0; key[i]; i++) {
+        c = toupper(key[i]);
+        if (c == 'J') c = 'I';
+        if (isalpha(c) && !used[c - 'A']) {
+            matrix[k / 5][k % 5] = c;
+            used[c - 'A'] = 1;
+            k++;
+        }
+    }
+
+    for (c = 'A'; c <= 'Z'; c++) {
+        if (!used[c - 'A']) {
+            if (c == 'J') continue;
+            matrix[k / 5][k % 5] = c;
+            k++;
+        }
+    }
+}
+
+void findPos(char matrix[5][5], char c, int *row, int *col) {
+    if (c == 'J') c = 'I';
+    for (int i = 0; i < 5; i++)
+        for (int j = 0; j < 5; j++)
+            if (matrix[i][j] == c) {
+                *row = i;
+                *col = j;
+                return;
+            }
+}
+
+void playfairEncrypt(char *text, char matrix[5][5], char *output) {
+    char prepared[200] = "";
+    int i, len = 0;
+
+    // Prepare text: remove non-letters, make uppercase, replace J with I
+    for (i = 0; text[i]; i++) {
+        if (isalpha(text[i])) {
+            char c = toupper(text[i]);
+            if (c == 'J') c = 'I';
+            prepared[len++] = c;
+        }
+    }
+
+    // Add 'X' between duplicate letters and at end if needed
+    char final[200] = "";
+    int j = 0;
+    for (i = 0; i < len; i += 2) {
+        char a = prepared[i];
+        char b = (i + 1 < len) ? prepared[i + 1] : 'X';
+        if (a == b) b = 'X';
+        final[j++] = a;
+        final[j++] = b;
+    }
+
+    final[j] = '\0';
+
+    // Encrypt pairs
+    for (i = 0; i < j; i += 2) {
+        int r1, c1, r2, c2;
+        findPos(matrix, final[i], &r1, &c1);
+        findPos(matrix, final[i + 1], &r2, &c2);
+
+        if (r1 == r2) {
+            output[i]     = matrix[r1][(c1 + 1) % 5];
+            output[i + 1] = matrix[r2][(c2 + 1) % 5];
+        } else if (c1 == c2) {
+            output[i]     = matrix[(r1 + 1) % 5][c1];
+            output[i + 1] = matrix[(r2 + 1) % 5][c2];
+        } else {
+            output[i]     = matrix[r1][c2];
+            output[i + 1] = matrix[r2][c1];
+        }
+    }
+    output[j] = '\0';
+}
+
+void playfairDecrypt(char *text, char matrix[5][5], char *output) {
+    int i, len = strlen(text);
+    for (i = 0; i < len; i += 2) {
+        int r1, c1, r2, c2;
+        findPos(matrix, text[i], &r1, &c1);
+        findPos(matrix, text[i + 1], &r2, &c2);
+
+        if (r1 == r2) {
+            output[i]     = matrix[r1][(c1 + 4) % 5];
+            output[i + 1] = matrix[r2][(c2 + 4) % 5];
+        } else if (c1 == c2) {
+            output[i]     = matrix[(r1 + 4) % 5][c1];
+            output[i + 1] = matrix[(r2 + 4) % 5][c2];
+        } else {
+            output[i]     = matrix[r1][c2];
+            output[i + 1] = matrix[r2][c1];
+        }
+    }
+    output[len] = '\0';
+}
+
+// ---------- Main Menu ----------
+int main() {
+    int choice, shift;
+    char text[200], key[100], output[200];
+    char matrix[5][5];
+
+    while (1) {
+        printf("\n1. Caesar Encrypt\n2. Caesar Decrypt\n3. Playfair Encrypt\n4. Playfair Decrypt\n0. Exit\nChoice: ");
+        scanf("%d", &choice);
+        getchar(); // clear newline
+
+        if (choice == 0) break;
+
+        switch (choice) {
+            case 1:
+                printf("Enter plaintext: ");
+                fgets(text, sizeof(text), stdin);
+                text[strcspn(text, "\n")] = '\0';
+                printf("Enter shift: ");
+                scanf("%d", &shift);
+                getchar();
+                caesarEncrypt(text, shift, output);
+                printf("Encrypted: %s\n", output);
+                break;
+            case 2:
+                printf("Enter ciphertext: ");
+                fgets(text, sizeof(text), stdin);
+                text[strcspn(text, "\n")] = '\0';
+                printf("Enter shift: ");
+                scanf("%d", &shift);
+                getchar();
+                caesarDecrypt(text, shift, output);
+                printf("Decrypted: %s\n", output);
+                break;
+            case 3:
+                printf("Enter key: ");
+                fgets(key, sizeof(key), stdin);
+                key[strcspn(key, "\n")] = '\0';
+                preparePlayfairKey(key, matrix);
+                printf("Enter plaintext: ");
+                fgets(text, sizeof(text), stdin);
+                text[strcspn(text, "\n")] = '\0';
+                playfairEncrypt(text, matrix, output);
+                printf("Encrypted: %s\n", output);
+                break;
+            case 4:
+                printf("Enter key: ");
+                fgets(key, sizeof(key), stdin);
+                key[strcspn(key, "\n")] = '\0';
+                preparePlayfairKey(key, matrix);
+                printf("Enter ciphertext: ");
+                fgets(text, sizeof(text), stdin);
+                text[strcspn(text, "\n")] = '\0';
+                playfairDecrypt(text, matrix, output);
+                printf("Decrypted: %s\n", output);
+                break;
+        }
+    }
+
+    return 0;
+}
+
+
+
+
+
+4.
+#include <stdio.h>
+#include <string.h>
+
+int main() {
+    char text[100], key[100], cipher[100], plain[100];
+    int len, klen;
+
+    /* 1) Read plaintext and key */
+    printf("Enter plaintext (A-Z only, no spaces): ");
+    scanf("%s", text);
+    printf("Enter key (A-Z only): ");
+    scanf("%s", key);
+
+    len  = strlen(text);
+    klen = strlen(key);
+
+    /* 2) Encryption */
+    for (int i = 0; i < len; i++) {
+        int t = text[i] - 'A';
+        int k = key[i % klen] - 'A';
+        cipher[i] = (t + k) % 26 + 'A';
+    }
+    cipher[len] = '\0';
+
+    /* 3) Decryption */
+    for (int i = 0; i < len; i++) {
+        int c = cipher[i] - 'A';
+        int k = key[i % klen] - 'A';
+        plain[i] = (c - k + 26) % 26 + 'A';
+    }
+    plain[len] = '\0';
+
+    /* 4) Output results */
+    printf("\nEncrypted text: %s\n", cipher);
+    printf("Decrypted text: %s\n", plain);
+
+    return 0;
+}
+
+
+
+5.
+#include <stdio.h>
+#include <string.h>
+
+long long modexp(long long base, long long exp, long long mod) {
+    long long result = 1;
+    for (long long i = 0; i < exp; i++) {
+        result = (result * base) % mod;
+    }
+    return result;
+}
+
+int main() {
+    long long p, q, n, phi, e, d;
+    char plaintext[100], decrypted[100];
+    long long ciphertext[100];
+    int len;
+
+    printf("Enter two distinct primes p and q: ");
+    scanf("%lld %lld", &p, &q);
+
+    n = p * q;
+    phi = (p - 1) * (q - 1);
+
+    printf("Enter public exponent e (1 < e < %lld): ", phi);
+    scanf("%lld", &e);
+
+    d = 1;
+    while ((d * e) % phi != 1) {
+        d++;
+    }
+
+    printf("\nPublic key:  (n, e) = (%lld, %lld)\n", n, e);
+    printf("Private key: (n, d) = (%lld, %lld)\n\n", n, d);
+
+    printf("Enter plaintext in CAPITAL LETTERS (no spaces): ");
+    scanf("%s", plaintext);
+    len = strlen(plaintext);
+
+    // Encrypt each character
+    for (int i = 0; i < len; i++) {
+        long long m = plaintext[i] - 'A';
+        ciphertext[i] = modexp(m, e, n);
+    }
+
+    // Decrypt each ciphertext number
+    for (int i = 0; i < len; i++) {
+        long long m = modexp(ciphertext[i], d, n);
+        decrypted[i] = (char)(m + 'A');
+    }
+    decrypted[len] = '\0';
+
+    printf("\nEncrypted numeric ciphertext: ");
+    for (int i = 0; i < len; i++) {
+        printf("%lld ", ciphertext[i]);
+    }
+
+    printf("\nDecrypted text: %s\n", decrypted);
+
+    return 0;
+}
+
+
+
+
+6.
+#include <stdio.h>
+
+// Naive modular exponentiation: computes (base^exp) % mod
+long long modexp(long long base, long long exp, long long mod) {
+    long long result = 1;
+    base %= mod;
+    for (long long i = 0; i < exp; i++) {
+        result = (result * base) % mod;
+    }
+    return result;
+}
+
+int main() {
+    long long p, g;
+    long long a, b;
+    long long A, B;
+    long long s1, s2;
+
+    /* 1) Agree on a prime modulus p and generator g */
+    printf("Enter prime modulus p: ");
+    if (scanf("%lld", &p) != 1) return 1;
+    printf("Enter generator g: ");
+    if (scanf("%lld", &g) != 1) return 1;
+
+    /* 2) Each party picks a private secret */
+    printf("Alice, enter your private key a: ");
+    if (scanf("%lld", &a) != 1) return 1;
+    printf("Bob,   enter your private key b: ");
+    if (scanf("%lld", &b) != 1) return 1;
+
+    /* 3) Compute public keys */
+    A = modexp(g, a, p);
+    B = modexp(g, b, p);
+    printf("\nAlice's public key A = %lld\n", A);
+    printf("Bob's   public key B = %lld\n", B);
+
+    /* 4) Compute shared secrets */
+    s1 = modexp(B, a, p);
+    s2 = modexp(A, b, p);
+    printf("\nAlice's shared secret = %lld\n", s1);
+    printf("Bob's   shared secret = %lld\n", s2);
+
+    return 0;
+}
